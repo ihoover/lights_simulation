@@ -1,7 +1,7 @@
 var c;
 var pos; //position
 var vel; //velocities
-var n = 61;
+var n = 67;
 var mouse_x;
 var mouse_y;
 var mouse_threshold = 50;
@@ -9,10 +9,14 @@ var interval = 12;
 var spring_const = 200;
 var mass = 1;
 var gravity = -200;
-var friction1 = .2;
-var lpass_length = 20;
-var inputs;
+var friction1 = .4;
+var lpass_length = 30;
+var inputs_y;
+var inputs_x;
 var smoothing_kernel = [Math.pow(Math.E, -9), Math.pow(Math.E, -4), Math.pow(Math.E, -1), Math.pow(Math.E, 0), Math.pow(Math.E, -1), Math.pow(Math.E, -4), Math.pow(Math.E, -9)]; // must be odd length!
+
+var gap;
+var size;
 
 if (Math.round((smoothing_kernel.length - 1) / 2) != (smoothing_kernel.length - 1) / 2) {
     alert("Smoothing kernel must be odd in length!");
@@ -40,17 +44,22 @@ function load() {
     c = document.getElementById("myCanvas");
     pos = zeros(n);
     vel = zeros(n);
-    inputs = zeros(lpass_length);
+    inputs_y = zeros(lpass_length);
+    inputs_x = zeros(lpass_length);
     
+    gap = (smoothing_kernel.length - 1) / 2;
+    size = c.width/(pos.length - 2*gap); // size so dots are touching
+    
+    c.style.background = "black";
     main();
 }
 
 function main() {
-    var mid = Math.floor(n / 2);
-    pos[mid] = getInput();
+    var index = getIndex();
     
+    pos[index] = getInput_y();
     update_vel();
-    vel[mid] = 0;
+    vel[index] = 0;
     update_pos();
     display();
     window.setTimeout(main, interval);
@@ -111,7 +120,6 @@ function display() {
     ctx.stroke();
     ctx.font = "15px Georgia";
 
-    var size = 10;
     var h = c.height;
     var w = c.width;
     var x = 0;
@@ -120,7 +128,7 @@ function display() {
     
     // gap for smoothing function
     var gap = (smoothing_kernel.length - 1) / 2;
-    
+    var size = c.width/(pos.length - 2*gap); // size so dots are touching
     
     
     for (var i = gap; i < pos.length - gap; i++){
@@ -133,9 +141,11 @@ function display() {
             value += smoothing_kernel[k] * pos[i + k - gap];
         }
         
-        y = h - value;
-        
-        ctx.fillRect(x - size / 2, y - size / 2, 10, 10);
+        // y = h - value;
+        y = c.height - size;
+        var value_scaled = Math.round(value / (c.height-mouse_threshold) * 256);
+        ctx.fillStyle = "rgb(" + value_scaled + "," + value_scaled + "," + value_scaled + ")";
+        ctx.fillRect(x - size / 2, y - size / 2, size, size);
         // ctx.fillText(Math.round(netYForce(i) * 10) / 10, x - size / 2, y - size / 2 - 20);
         // ctx.fillText(Math.round(pos[i] * 10) / 10, x - size / 2, y - size / 2 - 40);
         
@@ -148,7 +158,39 @@ function handleMouseMove(event) {
     mouse_y = event.pageY;
 }
 
-function getInput() {
+function getIndex() {
+    // number of visible squares
+    var visable = (n - gap * 2);
+    var index = Math.floor(visable * getInput_x() / c.width) + gap;
+    if (index >= pos.length) {
+        index = pos.length - 1;
+    }
+    if (index < 0) {
+        index = 0;
+    }
+    
+    return index;
+}
+
+function getInput_x() {
+    var new_input = mouse_x;
+    
+    
+    if (inputs_x.length > 1) {
+        for (var i = inputs_x.length-1; i > 0; i--){
+            inputs_x[i] = inputs_x[i-1]
+        }
+    }
+    inputs_x[0] = new_input;
+    var ave = 0;
+    for (var i = 0; i < inputs_x.length; i++){
+        ave += inputs_x[i]/inputs_x.length;
+    }
+    return ave;
+}
+
+
+function getInput_y() {
     var new_input;
     if (mouse_y > mouse_threshold && mouse_y < c.height)
         new_input = mouse_y - mouse_threshold;
@@ -157,16 +199,25 @@ function getInput() {
     else
         new_input = c.height - mouse_threshold;
     
-    if (inputs.length > 1) {
-        for (var i = inputs.length-1; i > 0; i--){
-            inputs[i] = inputs[i-1]
+    if (inputs_y.length > 1) {
+        for (var i = inputs_y.length-1; i > 0; i--){
+            inputs_y[i] = inputs_y[i-1]
         }
     }
-    inputs[0] = new_input;
+    inputs_y[0] = new_input;
     
     var ave = 0;
-    for (var i = 0; i < inputs.length; i++){
-        ave += inputs[i]/inputs.length;
+    for (var i = 0; i < inputs_y.length; i++){
+        ave += inputs_y[i]/inputs_y.length;
     }
     return ave;
+}
+
+// taken from http://stackoverflow.com/questions/442404/retrieve-the-position-x-y-of-an-html-element
+function getOffset(el) {
+  el = el.getBoundingClientRect();
+  return {
+    left: el.left + window.scrollX,
+    top: el.top + window.scrollY
+  }
 }
